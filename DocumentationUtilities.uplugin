@@ -1,0 +1,29 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "DocumentationUtilities",
+	"Description": "",
+	"Category": "Other",
+	"CreatedBy": "Bargest",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "DocumentationUtilities",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "DocumentationUtilitiesEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}
