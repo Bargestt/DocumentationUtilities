@@ -41,7 +41,6 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Redirectors", meta = (HideChildren))
 	FHintStruct LinksHelp = FHintStruct().Hint(EHintSource::PropertyTooltip);
 
-
 	UPROPERTY(config, EditAnywhere, Category = "Redirectors", meta = (ConfigRestartRequired = true))
 	bool bIncludeNativeHints;
 
@@ -64,21 +63,7 @@ public:
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
 
 	static FString ResolveLink(const FString& Link);
+	static bool HasLinkRedirector(const FString& Link);
 
 };
 
-
-/**
- * 
- */
-UCLASS()
-class  UHintAsset : public UPrimaryDataAsset
-{
-	GENERATED_BODY()
-
-public:
-	
-	UPROPERTY(EditAnywhere, Category = "Documentation", meta = (HideChildren))
-	FHintStruct Hint = FHintStruct().Hint(EHintSource::ClassTooltip).Link(this);
-
-};

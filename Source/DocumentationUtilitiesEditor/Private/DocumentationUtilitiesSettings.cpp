@@ -96,3 +96,31 @@ FString UDocumentationUtilities::ResolveLink(const FString& Link)
 
 	return Link;
 }
+
+bool UDocumentationUtilities::HasLinkRedirector(const FString& Link)
+{
+	if (const UDocumentationUtilities* Settings = GetDefault<UDocumentationUtilities>())
+	{
+		if (const FString* Redirect = Settings->NativeLinks.Find(Link))
+		{
+			return true;
+		}
+
+		if (const FString* Redirect = Settings->DocumentationLinks.Find(Link))
+		{
+			return true;		
+		}
+
+		if (const FString* Redirect = Settings->ClassDocumentationLinks.Find(Link))
+		{
+			return true;
+		}
+
+		if (const FString* Redirect = Settings->AssetDocumentationLinks.Find(Link))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
