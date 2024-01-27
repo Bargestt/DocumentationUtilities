@@ -32,6 +32,7 @@ enum class EHintSource : uint8
 
 /** 
  * Setup and display hint
+ * Also provides documentation link
  * 
  * Can forcefully hide settings using meta: HideChildren
  */
@@ -55,6 +56,9 @@ public:
 	UPROPERTY(EditAnywhere, meta = (EditCondition = "TooltipSource == EHintSource::PropertyValue", EditConditionHides))
 	FString TooltipText;
 
+
+	UPROPERTY(EditAnywhere)
+	FSoftObjectPath LinkAddressPath;
 
 	UPROPERTY(EditAnywhere)
 	FString LinkAddress;
@@ -120,15 +124,25 @@ public:
 		return *this;
 	}
 
-	FHintStruct& Link(const UObject* Object)
-	{
+	FHintStruct& Link(const UObject* Object, bool bLinkObjectPath = true)
+	{				 
 		LinkAddress = Object ? Object->GetPathName() : TEXT("");
+		if (bLinkObjectPath)
+		{
+			LinkAddressPath = LinkAddress;
+			LinkAddress.Reset();
+		}
 		return *this;
 	}
 
-	FHintStruct& Link(const UClass* Object)
+	FHintStruct& Link(const UClass* Object, bool bLinkObjectPath = true)
 	{
 		LinkAddress = Object ? Object->GetPathName() : TEXT("");
+		if (bLinkObjectPath)
+		{
+			LinkAddressPath = LinkAddress;
+			LinkAddress.Reset();
+		}
 		return *this;
 	}
 
@@ -137,17 +151,16 @@ public:
 		LinkAddress = Struct ? Struct->GetStructPathName().ToString() : TEXT("");
 		return *this;
 	}
-
+	
+	bool HasLink() const { return !LinkAddressPath.IsNull() || !LinkAddress.IsEmpty(); }
+	bool IsObjectLink() const { return !LinkAddressPath.IsNull(); }
+	FString GetLink() const { return LinkAddressPath.IsNull() ? LinkAddress : LinkAddressPath.ToString(); }
 
 	void PostSerialize(const FArchive& Ar)
 	{
-		if (Ar.IsSaving())
+		if (Ar.IsSaving() && HasLink())
 		{
-			if (!LinkAddress.IsEmpty())
-			{
-				Ar.MarkSearchableName(FHintStruct::StaticStruct(), *LinkAddress);
-			}
-			Ar.MarkSearchableName(FHintStruct::StaticStruct(), NAME_None);
+			Ar.MarkSearchableName(FHintStruct::StaticStruct(), *GetLink());
 		}
 	}
 #endif // WITH_EDITORONLY_DATA

@@ -22,12 +22,27 @@ public:
 protected:
 	FText GetHint(TSharedRef<IPropertyHandle> StructHandle, TSharedRef<IPropertyHandle> ManualValueHandle, TSharedRef<IPropertyHandle> ModeHandle, TArray<UObject*> OuterChain) const;
 
-	void SetLink(FString NewLink);
+	void SetLink(FString NewLink, bool bTryLock = true);
+	void SetLinkAndLock(FString NewLink) { SetLink(NewLink, true); }
+	FString GetLink() const;
+	FString GetLinkAddress() const;
+
+	FText GetLinkText() const;
+	bool LinkReadOnly() const;
+	void ToggleLock();
+
+	void CopyLink();
+	void PasteLink();
+
+	void CopyLinkAddress();
+
+	void AddressChanged(const FText& NewValue, ETextCommit::Type ChangeType);
 
 	TSharedRef<SWidget> CreateLinkOptions();
 
-	static void OpenLink(const FString& Link);
-
 private:
-	TSharedPtr<IPropertyHandle> LinkHandle;
+	//TSharedPtr<IPropertyHandle> HintStructHandle;
+
+	TSharedPtr<IPropertyHandle> LinkAddressPathHandle;
+	TSharedPtr<IPropertyHandle> LinkAddressHandle;
 };

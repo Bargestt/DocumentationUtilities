@@ -1,5 +1,6 @@
 
 #include "HintStructCustomization.h"
+#include "DocumentationUtilitiesEditor.h"
 #include "HintStruct.h"
 #include "DocumentationUtilitiesSettings.h"
 
@@ -10,9 +11,7 @@
 #include <HAL/PlatformProcess.h>
 #include <HAL/PlatformApplicationMisc.h>
 
-#include <Dialogs/Dialogs.h>
-#include <Framework/Notifications/NotificationManager.h>
-#include <Widgets/Notifications/SNotificationList.h>
+
 
 
 #define LOCTEXT_NAMESPACE "HintStructCustomization"
@@ -20,6 +19,10 @@
 
 void FHintStructCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> PropertyHandle, FDetailWidgetRow& HeaderRow, IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
+	LinkAddressPathHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FHintStruct, LinkAddressPath));
+	LinkAddressHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FHintStruct, LinkAddress));
+
+
 	TArray<UObject*> Outers;
 	PropertyHandle->GetOuterObjects(Outers);
 
@@ -35,10 +38,6 @@ void FHintStructCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> Prope
 		PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FHintStruct, TooltipSource)).ToSharedRef(),
 		Outers);
 
-	FString Link;
-	PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FHintStruct, LinkAddress))->GetValue(Link);
-	
-	FString Address = UDocumentationUtilities::ResolveLink(Link);
 
 	HeaderRow	
 	.NameContent()
@@ -73,14 +72,14 @@ void FHintStructCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> Prope
 			.VAlign(VAlign_Center)
 			.WidthOverride(22)
 			.HeightOverride(22)
-			.ToolTipText(FText::FromString(Address))
-			.Visibility(Link.IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible)
+			.ToolTipText(FText::FromString(GetLinkAddress()))
+			.Visibility(GetLink().IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible)
 			[	
 				SNew(SButton)
 				.ButtonStyle(FAppStyle::Get(), "SimpleButton")
-				.OnClicked_Lambda([Link]()
+				.OnClicked_Lambda([this]()
 				{
-					FHintStructCustomization::OpenLink(Link);
+					IDocumentationUtilitiesEditorModule::OpenLink(GetLink());
 					return FReply::Handled();
 				})
 				.ContentPadding(0)
@@ -93,28 +92,19 @@ void FHintStructCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> Prope
 		]
 	];
 
-	if (!Link.IsEmpty() || !Address.IsEmpty())
-	{
-		HeaderRow
-		.AddCustomContextMenuAction(FUIAction(
-			FExecuteAction::CreateLambda([Link]()
-			{
-				FPlatformApplicationMisc::ClipboardCopy(*Link);
-			})),
-			LOCTEXT("CopyLink", "Copy Link"),
-			LOCTEXT("CopyLinkTooltip", "Copy link value"),
-			FSlateIcon()
-		)
-		.AddCustomContextMenuAction(FUIAction(
-			FExecuteAction::CreateLambda([Address]()
-			{
-				FPlatformApplicationMisc::ClipboardCopy(*Address);
-			})),
-			LOCTEXT("CopyAddress", "Copy Address"),
-			LOCTEXT("CopyAddressTooltip", "Copy final link address"),
-			FSlateIcon()
-		);
-	}
+	HeaderRow
+	.AddCustomContextMenuAction(FUIAction(
+		FExecuteAction::CreateSP(this, &FHintStructCustomization::CopyLink)),
+		LOCTEXT("CopyLink", "Copy Link"),
+		LOCTEXT("CopyLinkTooltip", "Copy link value"),
+		FSlateIcon()
+	)
+	.AddCustomContextMenuAction(FUIAction(
+		FExecuteAction::CreateSP(this, &FHintStructCustomization::CopyLinkAddress)),
+		LOCTEXT("CopyAddress", "Copy Address"),
+		LOCTEXT("CopyAddressTooltip", "Copy final link address"),
+		FSlateIcon()
+	);
 }
 
 
@@ -134,30 +124,33 @@ void FHintStructCustomization::CustomizeChildren(TSharedRef<IPropertyHandle> Pro
 
 	if (bIsCDO)
 	{
+		// Show all but last two
 		uint32 NumChildren = 0;
 		PropertyHandle->GetNumChildren(NumChildren);
-		for (uint32 Index = 0; Index < NumChildren - 1; Index++)
+		for (uint32 Index = 0; Index < NumChildren - 2; Index++)
 		{
 			ChildBuilder.AddProperty(PropertyHandle->GetChildHandle(Index).ToSharedRef());
-		}
+		}		
 
-		LinkHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FHintStruct, LinkAddress));
-
-
- 		bool bLinkError = false;		
+ 		bool bLinkError = false;
 		{			
-			FString Link; 
-			if (LinkHandle->GetValue(Link) == FPropertyAccess::Success && !Link.IsEmpty())
+			FString Link = GetLink(); 
+			if (!Link.IsEmpty() && Link != TEXT("None"))
 			{
-				FString Address = UDocumentationUtilities::ResolveLink(Link);
-				bLinkError = !(Address.StartsWith(TEXT("http")) || Address.StartsWith(TEXT("https")));
+				bLinkError = !IDocumentationUtilitiesEditorModule::IsLinkValid(Link);
 			}
 		}
 		
-		ChildBuilder.AddProperty(LinkHandle.ToSharedRef()).CustomWidget()
+
+		ChildBuilder.AddCustomRow(LOCTEXT("LinkAddress", "LinkAddress"))
+		.CopyAction(FUIAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::CopyLink)))
+		.PasteAction(FUIAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::PasteLink)))
 		.NameContent()
 		[
-			LinkHandle->CreatePropertyNameWidget()
+			SNew(STextBlock)
+			.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
+			.Text(LOCTEXT("LinkAdressLabel", "Link Address"))
+			.ToolTipText(LOCTEXT("LinkAdressTooltip", "Set link address using name from Settings, Asset, Class or enter http link directly"))
 		]
 		.ValueContent()
 		[
@@ -167,7 +160,38 @@ void FHintStructCustomization::CustomizeChildren(TSharedRef<IPropertyHandle> Pro
 				SNew(SBox)
 				.MinDesiredWidth(125.0f)
 				[
-					LinkHandle->CreatePropertyValueWidget()
+					SNew(SEditableTextBox)							
+					.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
+					.Text(this, &FHintStructCustomization::GetLinkText)
+					.ToolTipText(this, &FHintStructCustomization::GetLinkText)
+					.OnTextCommitted(FOnTextCommitted::CreateSP(this, &FHintStructCustomization::AddressChanged))
+					.IsReadOnly(this, &FHintStructCustomization::LinkReadOnly)
+					.ClearKeyboardFocusOnCommit(false)
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(4, 0)
+			[
+				SNew(SButton)
+				.ButtonStyle( FAppStyle::Get(), "SimpleButton" )
+				.ToolTipText_Lambda([this]()
+				{
+					return this->LinkReadOnly() ? LOCTEXT("Unbind", "Unbind Link from the object") : LOCTEXT("Bind", "Try bind Link to the object");
+				})
+				.OnClicked_Lambda([this]()
+				{
+					this->ToggleLock();
+					return FReply::Handled();
+				})
+				.ContentPadding(0.f)
+				[
+					SNew(SImage)
+					.Image_Lambda([this]()
+					{						
+						return this->LinkReadOnly() ? FAppStyle::Get().GetBrush("Icons.Lock") : FAppStyle::Get().GetBrush("Icons.Unlock");
+					})
+					.ColorAndOpacity(FSlateColor::UseForeground())
 				]
 			]
 			+ SHorizontalBox::Slot()
@@ -178,7 +202,9 @@ void FHintStructCustomization::CustomizeChildren(TSharedRef<IPropertyHandle> Pro
 				SNew(SComboButton)
 				.ButtonStyle( FAppStyle::Get(), "SimpleButton" )
 				.HasDownArrow(false)	
-				.ToolTipText(bLinkError ? LOCTEXT("LinkError", "Failed to resolve link") : LOCTEXT("PinkLink", "Pick link from settings"))
+				.ToolTipText(bLinkError ? 
+					LOCTEXT("LinkError", "This link will have no effect.\nEnter different string or add action in settings") : 
+					LOCTEXT("PinkLink", "Pick link from settings"))
 				.ButtonContent()
 				[
 					SNew(SBox)
@@ -272,12 +298,115 @@ FText FHintStructCustomization::GetHint(TSharedRef<IPropertyHandle> StructHandle
 }
 
 
-void FHintStructCustomization::SetLink(FString NewLink)
+void FHintStructCustomization::SetLink(FString NewLink, bool bTryLock/* = true*/)
 {
-	if (LinkHandle.IsValid() && LinkHandle->IsValidHandle())
+	if (LinkAddressPathHandle.IsValid() && LinkAddressHandle.IsValid())
 	{
-		LinkHandle->SetValue(NewLink);
+		FScopedTransaction Transaction(LOCTEXT("SetLink", "Set Link"));
+
+		FString Path;
+
+		LinkAddressPathHandle->SetValueFromFormattedString(TEXT("None"));
+		if (bTryLock)
+		{
+			LinkAddressPathHandle->SetValueFromFormattedString(NewLink);
+			LinkAddressPathHandle->GetValueAsFormattedString(Path);
+		}
+
+		bool bHasPath = !Path.IsEmpty() && Path != TEXT("None");
+		LinkAddressHandle->SetValueFromFormattedString(bHasPath ? TEXT("") : NewLink);
+	}	
+}
+
+FString FHintStructCustomization::GetLink() const
+{
+	FString Path;	
+	if (LinkAddressPathHandle->GetValueAsFormattedString(Path) == FPropertyAccess::Success && !Path.IsEmpty() && Path != TEXT("None"))
+	{
+		return Path;
 	}
+
+	Path.Reset();
+	if (LinkAddressHandle->GetValueAsFormattedString(Path) == FPropertyAccess::Success)
+	{
+		return Path;
+	}
+
+	return TEXT("");
+}
+
+FString FHintStructCustomization::GetLinkAddress() const
+{
+	FString Link = GetLink();	
+	FString Address = UDocumentationUtilities::ResolveLink(Link);
+	return Address;
+}
+
+FText FHintStructCustomization::GetLinkText() const
+{
+	return FText::FromString(GetLink());
+}
+
+bool FHintStructCustomization::LinkReadOnly() const
+{
+	FString Path;
+	bool bIsEditable = LinkAddressPathHandle->GetValueAsFormattedString(Path) == FPropertyAccess::Success && Path == TEXT("None");
+	return !bIsEditable;
+}
+
+void FHintStructCustomization::ToggleLock()
+{
+	FString Path;
+	if (LinkAddressPathHandle->GetValueAsFormattedString(Path) == FPropertyAccess::Success)
+	{
+		if (Path != TEXT("None"))
+		{
+			FScopedTransaction Transaction(LOCTEXT("UnlockLink", "Unlock Link"));
+
+			LinkAddressPathHandle->SetValueFromFormattedString(TEXT("None"));
+			LinkAddressHandle->SetValue(Path);
+		}
+		else
+		{
+			FScopedTransaction Transaction(LOCTEXT("LockLink", "Lock Link"));
+						
+			Path.Reset();
+
+			FString NewLink;
+			LinkAddressHandle->GetValueAsFormattedString(NewLink);
+
+			LinkAddressPathHandle->SetValueFromFormattedString(TEXT("None"));
+			LinkAddressPathHandle->SetValueFromFormattedString(NewLink);
+			LinkAddressPathHandle->GetValueAsFormattedString(Path);
+
+			bool bHasPath = !Path.IsEmpty() && Path != TEXT("None");
+			LinkAddressHandle->SetValueFromFormattedString(bHasPath ? TEXT("") : NewLink);
+		}
+	}
+}
+
+void FHintStructCustomization::CopyLink()
+{
+	FString Data = GetLink();
+	FPlatformApplicationMisc::ClipboardCopy(*Data);
+}
+
+void FHintStructCustomization::PasteLink()
+{
+	FString Data;
+	FPlatformApplicationMisc::ClipboardPaste(Data);
+	SetLink(Data, true);
+}
+
+void FHintStructCustomization::CopyLinkAddress()
+{
+	FString Data = GetLinkAddress();
+	FPlatformApplicationMisc::ClipboardCopy(*Data);
+}
+
+void FHintStructCustomization::AddressChanged(const FText& NewValue, ETextCommit::Type ChangeType)
+{
+	SetLink(NewValue.ToString(), false);
 }
 
 TSharedRef<SWidget> FHintStructCustomization::CreateLinkOptions()
@@ -288,7 +417,7 @@ TSharedRef<SWidget> FHintStructCustomization::CreateLinkOptions()
 	if (Settings)
 	{						
 		TArray<UObject*> Outers;
-		LinkHandle->GetOuterObjects(Outers);
+		LinkAddressHandle->GetOuterObjects(Outers);
 		if (Outers.Num() > 0 && Outers[0] != nullptr)
 		{
 			UObject* Outer = Outers[0];
@@ -301,103 +430,130 @@ TSharedRef<SWidget> FHintStructCustomization::CreateLinkOptions()
 			{
 				FString OptionValue = Outer->GetPathName();
 
-				FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLink, OptionValue));
+				FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLinkAndLock, OptionValue));
 				MenuBuilder.AddMenuEntry(LOCTEXT("LinkOption_Self", "Self"), FText::FromString(OptionValue), FSlateIcon(), LinkAction);
 			}
 
 			{
 				FString OptionValue = Outer->GetName();
 
-				FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLink, OptionValue));
+				FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLinkAndLock, OptionValue));
 				MenuBuilder.AddMenuEntry(LOCTEXT("LinkOption_SelfShort", "Self Short"), FText::FromString(OptionValue), FSlateIcon(), LinkAction);
 			}
 
 			{
 				FString OptionValue = OuterClass->GetStructPathName().ToString();
 
-				FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLink, OptionValue));
+				FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLinkAndLock, OptionValue));
 				MenuBuilder.AddMenuEntry(LOCTEXT("LinkOption_Class", "Class"), FText::FromString(OptionValue), FSlateIcon(), LinkAction);
 			}
 
 			{
 				FString OptionValue = OuterClass->GetName();
 
-				FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLink, OptionValue));
+				FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLinkAndLock, OptionValue));
 				MenuBuilder.AddMenuEntry(LOCTEXT("LinkOption_ClassShort", "Class Short"), FText::FromString(OptionValue), FSlateIcon(), LinkAction);
 			}
 		}
 
 
 
-		MenuBuilder.BeginSection("Native", LOCTEXT("SectionNative", "Native"));						
-		for (auto& KeyValuePair : Settings->NativeLinks)
+		TMap<FString, FString> LinkOptions;
+
+
+		if (Settings->bLinksPicker_ShowNative)
 		{
-			FString LinkKey = KeyValuePair.Key;
-			FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLink, LinkKey));
+			LinkOptions = Settings->CollectLinksOfType(EDocumentationLinkType::Native);
+			if (LinkOptions.Num() > 0)
+			{
+				MenuBuilder.BeginSection("Native", LOCTEXT("SectionNative", "Native"));	
+				for (auto& KeyValuePair : LinkOptions)
+				{
+					FString LinkKey = KeyValuePair.Key;
+					FString DisplayName = LinkKey;
+					if (Settings->bLinksPicker_ShortNames)
+					{
+						LinkKey.Split(TEXT("."), nullptr, &DisplayName);
+					}	
 
-			MenuBuilder.AddMenuEntry(FText::FromString(LinkKey), FText::FromString(KeyValuePair.Value), FSlateIcon(), LinkAction);
+					FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLinkAndLock, LinkKey));
+					MenuBuilder.AddMenuEntry(FText::FromString(DisplayName), FText::FromString(KeyValuePair.Value), FSlateIcon(), LinkAction);
+				}
+				MenuBuilder.EndSection();
+			}
 		}
-		MenuBuilder.EndSection();
 
-		MenuBuilder.BeginSection("Doc", LOCTEXT("SectionDoc", "Doc"));						
-		for (auto& KeyValuePair : Settings->DocumentationLinks)
+
+		if (Settings->bLinksPicker_ShowString)
 		{
-			FString LinkKey = KeyValuePair.Key;
-			FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLink, LinkKey));
+			LinkOptions = Settings->CollectLinksOfType(EDocumentationLinkType::String);
+			if (LinkOptions.Num() > 0)
+			{
+				MenuBuilder.BeginSection("String", LOCTEXT("SectionString", "String"));
+				for (auto& KeyValuePair : LinkOptions)
+				{
+					FString LinkKey = KeyValuePair.Key;
+					FString DisplayName = LinkKey;
+					if (Settings->bLinksPicker_ShortNames)
+					{
+						LinkKey.Split(TEXT("."), nullptr, &DisplayName);
+					}					
 
-			MenuBuilder.AddMenuEntry(FText::FromString(LinkKey), FText::FromString(KeyValuePair.Value), FSlateIcon(), LinkAction);
+					FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLinkAndLock, LinkKey));
+					MenuBuilder.AddMenuEntry(FText::FromString(DisplayName), FText::FromString(KeyValuePair.Value), FSlateIcon(), LinkAction);
+				}
+				MenuBuilder.EndSection();
+			}
 		}
-		MenuBuilder.EndSection();
 
-		MenuBuilder.BeginSection("Class", LOCTEXT("SectionClass", "Class"));						
-		for (auto& KeyValuePair : Settings->ClassDocumentationLinks)
+
+		if (Settings->bLinksPicker_ShowClass)
 		{
-			FString LinkKey = KeyValuePair.Key.ToString();
-			FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLink, LinkKey));
+			LinkOptions = Settings->CollectLinksOfType(EDocumentationLinkType::Class);
+			if (LinkOptions.Num() > 0)
+			{
+				MenuBuilder.BeginSection("Class", LOCTEXT("SectionClass", "Class"));
+				for (auto& KeyValuePair : LinkOptions)
+				{
+					FString LinkKey = KeyValuePair.Key;
+					FString DisplayName = LinkKey;
+					if (Settings->bLinksPicker_ShortNames)
+					{
+						LinkKey.Split(TEXT("."), nullptr, &DisplayName);
+					}	
 
-			MenuBuilder.AddMenuEntry(FText::FromString(LinkKey), FText::FromString(KeyValuePair.Value), FSlateIcon(), LinkAction);
+					FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLinkAndLock, LinkKey));
+					MenuBuilder.AddMenuEntry(FText::FromString(DisplayName), FText::FromString(KeyValuePair.Value), FSlateIcon(), LinkAction);
+				}
+				MenuBuilder.EndSection();
+			}
 		}
-		MenuBuilder.EndSection();
 
-		MenuBuilder.BeginSection("Asset", LOCTEXT("SectionAsset", "Asset"));						
-		for (auto& KeyValuePair : Settings->AssetDocumentationLinks)
+
+		if (Settings->bLinksPicker_ShowAsset)
 		{
-			FString LinkKey = KeyValuePair.Key.ToString();
-			FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLink, LinkKey));
+			LinkOptions = Settings->CollectLinksOfType(EDocumentationLinkType::Asset);
+			if (LinkOptions.Num() > 0)
+			{			
+				MenuBuilder.BeginSection("Asset", LOCTEXT("SectionAsset", "Asset"));
+				for (auto& KeyValuePair : LinkOptions)
+				{
+					FString LinkKey = KeyValuePair.Key;
+					FString DisplayName = LinkKey;
+					if (Settings->bLinksPicker_ShortNames)
+					{
+						LinkKey.Split(TEXT("."), nullptr, &DisplayName);
+					}	
 
-			MenuBuilder.AddMenuEntry(FText::FromString(LinkKey), FText::FromString(KeyValuePair.Value), FSlateIcon(), LinkAction);
+					FUIAction LinkAction(FExecuteAction::CreateSP(this, &FHintStructCustomization::SetLinkAndLock, LinkKey));
+					MenuBuilder.AddMenuEntry(FText::FromString(DisplayName), FText::FromString(KeyValuePair.Value), FSlateIcon(), LinkAction);
+				}
+				MenuBuilder.EndSection();
+			}
 		}
-		MenuBuilder.EndSection();
 	}
 
 	return MenuBuilder.MakeWidget();
-}
-
-void FHintStructCustomization::OpenLink(const FString& Link)
-{
-	FString Address = UDocumentationUtilities::ResolveLink(Link);
-	if (Address.StartsWith(TEXT("http")) || Address.StartsWith(TEXT("https")))
-	{
-		FText Message = LOCTEXT("OpeningURLMessage", "You are about to open an external URL. This will open your web browser. Do you want to proceed?");
-		FText URLDialog = LOCTEXT("OpeningURLTitle", "Open external link");
-
-		FSuppressableWarningDialog::FSetupInfo Info(Message, URLDialog, "Hint_SuppressOpenURLWarning");
-		Info.ConfirmText = LOCTEXT("OpenURL_yes", "Yes");
-		Info.CancelText = LOCTEXT("OpenURL_no", "No");
-		FSuppressableWarningDialog OpenURLWarning(Info);
-
-		if (OpenURLWarning.ShowModal() != FSuppressableWarningDialog::Cancel)
-		{
-			FPlatformProcess::LaunchURL(*Address, nullptr, nullptr);
-		}
-	}
-	else
-	{
-		const FText ErrorText = LOCTEXT("OpenURL_BadAddress", "Failed to open link: Bad address");
-		FNotificationInfo Info(ErrorText);
-		Info.ExpireDuration = 2.0f;
-		FSlateNotificationManager::Get().AddNotification(Info);
-	}
 }
 
 #undef LOCTEXT_NAMESPACE

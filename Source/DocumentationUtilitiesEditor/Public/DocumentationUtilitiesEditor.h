@@ -7,7 +7,12 @@
 
 class IDocumentationUtilitiesEditorModule : public IModuleInterface
 {
-	
+public:
+	/**  */
+	static void OpenLink(FString Link);
+
+	/** Check link can result in action */
+	static bool IsLinkValid(FString Link);
 };
 
 

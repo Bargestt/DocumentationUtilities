@@ -29,7 +29,9 @@ public class DocumentationUtilitiesEditor : ModuleRules
 				"DeveloperSettings",
 
                 "UnrealEd",
-				"ApplicationCore"
+				"ApplicationCore",
+				"ToolMenus",
+                "ContentBrowser"
             }
 		);
 	}
