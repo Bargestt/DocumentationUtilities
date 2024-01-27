@@ -43,24 +43,24 @@ struct DOCUMENTATIONUTILITIES_API FHintStruct
 
 #if WITH_EDITORONLY_DATA
 public:
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Hint")
 	EHintSource HintSource;
 
-	UPROPERTY(EditAnywhere, meta = (EditCondition = "HintSource == EHintSource::PropertyValue", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = "Hint", meta = (EditCondition = "HintSource == EHintSource::PropertyValue", EditConditionHides))
 	FString HintText;
 
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Hint")
 	EHintSource TooltipSource;
 
-	UPROPERTY(EditAnywhere, meta = (EditCondition = "TooltipSource == EHintSource::PropertyValue", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = "Hint", meta = (EditCondition = "TooltipSource == EHintSource::PropertyValue", EditConditionHides))
 	FString TooltipText;
 
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Hint")
 	FSoftObjectPath LinkAddressPath;
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Hint")
 	FString LinkAddress;
 
 public:

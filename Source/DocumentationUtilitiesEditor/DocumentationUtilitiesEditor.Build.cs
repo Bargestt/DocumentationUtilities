@@ -1,4 +1,4 @@
-// Copyright (C) Vasily Bulgakov. 2023. All Rights Reserved.
+// Copyright (C) Vasily Bulgakov. 2024. All Rights Reserved.
 
 using UnrealBuildTool;
 

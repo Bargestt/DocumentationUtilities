@@ -1,4 +1,4 @@
-// Copyright (C) Vasily Bulgakov. 2023. All Rights Reserved.
+// Copyright (C) Vasily Bulgakov. 2024. All Rights Reserved.
 
 
 #include "DocumentationUtilitiesSettings.h"
@@ -98,7 +98,7 @@ void UDocumentationUtilities::PostInitProperties()
 			}
 		}
 
-		TempMap.Remove(Hint.GetLink());	
+		//TempMap.Remove(Hint.GetLink());
 		TempMap.KeyStableSort([](const FString& A, const FString& B) { return A < B; });
 		for (const auto& Pair : TempMap)
 		{

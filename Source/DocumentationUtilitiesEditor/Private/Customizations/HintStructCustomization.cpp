@@ -1,3 +1,4 @@
+// Copyright (C) Vasily Bulgakov. 2023. All Rights Reserved.
 
 #include "HintStructCustomization.h"
 #include "DocumentationUtilitiesEditor.h"
