@@ -142,7 +142,6 @@ void UDocumentationUtilities::PostInitProperties()
 
 const FDocumentationHintLink* UDocumentationUtilities::FindLinkByKey(const FString& Link)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE(UDocumentationUtilities::FindLinkByKey)
 	if (const UDocumentationUtilities* Settings = GetDefault<UDocumentationUtilities>())
 	{
 		auto Lambda = [Link](const FDocumentationHintLink& Entry) { return Entry.GetLinkKey() == Link; };
