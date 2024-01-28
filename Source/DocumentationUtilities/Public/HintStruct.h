@@ -6,6 +6,27 @@
 #include "HintStruct.generated.h"
 
 
+
+// 
+// 
+// Intentionally kept in runtime module for multiple reasons
+// 
+// While moving struct to Editor module will automatically strip it from builds
+// It will produce multiple problems
+// - Using them in code will require conditional includes and conditional dependency in Build.cs
+// - Packaged Blueprints have no Editor-only properties, 
+//   they will keep the property, report error, and replace property value with FFallbackStruct.
+//   FHintStruct is stripped down do empty so this is identical situation, but without error messages
+// 
+// 
+// You can setup default value in declaration
+// 
+// #if WITH_EDITORONLY_DATA
+// UPROPERTY(EditAnywhere, Category = "")
+// FHintStruct Hint = FHintStruct().Hint(EHintSource::PropertyTooltip).Tooltip(EHintSource::ClassTooltip).Link(this);
+// #endif
+
+
 /** */
 UENUM()
 enum class EHintSource : uint8
@@ -23,12 +44,6 @@ enum class EHintSource : uint8
 
 	MAX UMETA(Hidden)
 };
-
-//
-// Kept in runtime module to avoid bunch of packaging warnings
-//
-
-
 
 /** 
  * Setup and display hint
