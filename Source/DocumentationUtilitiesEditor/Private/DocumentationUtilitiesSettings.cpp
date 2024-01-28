@@ -47,6 +47,7 @@ UDocumentationUtilities::UDocumentationUtilities(const FObjectInitializer& Objec
 	AssetDocumentationLink = TEXT("Asset Documentation - {0}");
 
 	bCollectNativeHints = true;
+	bRemoveOldNativeHints = true;
 
 	bLinksPicker_ShowNative = true;
 	bLinksPicker_ShowString = true;
@@ -70,12 +71,9 @@ void UDocumentationUtilities::PostInitProperties()
 
 	if (bCollectNativeHints)
 	{
-		FScopedDurationTimeLogger(TEXT("DocumentationUtilities::IncludeNativeHints"));
-
-		TMap<FString, FString> OldNativeLinks = CollectLinksOfType(EDocumentationLinkType::Native);
-		NativeLinks.Reset();
-
-		TMap<FString, FString> TempMap;
+		TMap<FString, FString> OldNativeLinks = CollectLinksOfType(EDocumentationLinkType::Native);		
+		
+		TMap<FString, FString> ValidNativeLinks;
 		for (TObjectIterator<UClass> ClassIt; ClassIt; ++ClassIt)
 		{
 			UClass* Class = *ClassIt;
@@ -92,15 +90,45 @@ void UDocumentationUtilities::PostInitProperties()
 					if (!LinkKey.IsEmpty())
 					{
 						const FString* OldLink = OldNativeLinks.Find(LinkKey);
-						TempMap.Add(LinkKey, OldLink ? *OldLink : TEXT(""));
+						ValidNativeLinks.Add(LinkKey, OldLink ? *OldLink : TEXT(""));
 					}					
 				}
 			}
+		}		
+
+		for (TObjectIterator<UScriptStruct> StructIt; StructIt; ++StructIt)
+		{
+			UScriptStruct* Struct = *StructIt;
+			for (TFieldIterator<FStructProperty> PropertyIt(Struct, EFieldIteratorFlags::IncludeSuper); PropertyIt; ++PropertyIt)
+			{
+				FStructProperty* Prop = *PropertyIt;
+				if (Prop->Struct == FHintStruct::StaticStruct())
+				{
+					FStructOnScope DefaultStruct(Struct);
+					
+					const FHintStruct* Value = Prop->ContainerPtrToValuePtr<FHintStruct>(DefaultStruct.GetStructMemory());
+					
+					FString LinkKey = Value ? Value->GetLink() : TEXT("");
+					if (!LinkKey.IsEmpty())
+					{
+						const FString* OldLink = OldNativeLinks.Find(LinkKey);
+						ValidNativeLinks.Add(LinkKey, OldLink ? *OldLink : TEXT(""));
+					}	
+				}
+			}
+		}
+		ValidNativeLinks.KeyStableSort([](const FString& A, const FString& B) { return A < B; });
+
+		if (bRemoveOldNativeHints)
+		{
+			NativeLinks.Reset();
+		}
+		else
+		{
+			NativeLinks.RemoveAll([ValidNativeLinks](const FDocumentationHintLink& Entry) { return ValidNativeLinks.Contains(Entry.GetLinkKey()); });
 		}
 
-		//TempMap.Remove(Hint.GetLink());
-		TempMap.KeyStableSort([](const FString& A, const FString& B) { return A < B; });
-		for (const auto& Pair : TempMap)
+		for (const auto& Pair : ValidNativeLinks)
 		{
 			FDocumentationHintLink NativeLink;
 			NativeLink.Type = EDocumentationLinkType::Native;
@@ -114,24 +142,21 @@ void UDocumentationUtilities::PostInitProperties()
 
 const FDocumentationHintLink* UDocumentationUtilities::FindLinkByKey(const FString& Link)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(UDocumentationUtilities::FindLinkByKey)
 	if (const UDocumentationUtilities* Settings = GetDefault<UDocumentationUtilities>())
 	{
 		auto Lambda = [Link](const FDocumentationHintLink& Entry) { return Entry.GetLinkKey() == Link; };
 
-		if (const FDocumentationHintLink* Redirect = Settings->Links.FindByPredicate(Lambda))
+		TArray<const TArray<FDocumentationHintLink>*> Sources = Settings->GetSources();
+		for (const TArray<FDocumentationHintLink>* SourcePtr : Sources)
 		{
-			if (Redirect->HasValue())
+			if (const FDocumentationHintLink* Redirect = SourcePtr->FindByPredicate(Lambda))
 			{
-				return Redirect;
-			}			
-		}
-
-		if (const FDocumentationHintLink* Redirect = Settings->NativeLinks.FindByPredicate(Lambda))
-		{
-			if (Redirect->HasValue())
-			{
-				return Redirect;
-			}			
+				if (Redirect->HasValue())
+				{
+					return Redirect;
+				}			
+			}
 		}
 	}
 	return nullptr;
@@ -150,17 +175,20 @@ FString UDocumentationUtilities::ResolveLink(const FString& Link)
 
 TMap<FString, FString> UDocumentationUtilities::CollectLinksOfType(EDocumentationLinkType Type) const
 {
-	TMap<FString, FString> Map;
+	TArray<const TArray<FDocumentationHintLink>*> Sources = GetSources();
 
-	const TArray<FDocumentationHintLink>& Source = (Type == EDocumentationLinkType::Native) ? NativeLinks : Links;
-	for (const FDocumentationHintLink& Link : Source)
+	TMap<FString, FString> Map;
+	for (const TArray<FDocumentationHintLink>* SourcePtr : Sources)
 	{
-		if (Link.IsValid() && Link.Type == Type)
+		const TArray<FDocumentationHintLink>& Source = *SourcePtr;
+		for (const FDocumentationHintLink& Link : Source)
 		{
-			Map.Add(Link.GetLinkKey(), Link.Value);			
+			if (Link.IsValid() && Link.Type == Type)
+			{
+				Map.Add(Link.GetLinkKey(), Link.Value);			
+			}
 		}
 	}
-
 	return Map;
 }
 

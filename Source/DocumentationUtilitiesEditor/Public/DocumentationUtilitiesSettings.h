@@ -41,6 +41,11 @@ struct FDocumentationHintLink
 	UPROPERTY(EditAnywhere, Category = "Link")
 	FString Value;
 
+	FDocumentationHintLink()
+		: Type(EDocumentationLinkType::String)
+	{
+
+	}
 
 public:
 	FString GetLinkKey() const
@@ -161,11 +166,20 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "Documentation: Links", meta = (ConfigRestartRequired = true))
 	bool bCollectNativeHints;
 
+	/** Remove Native links if they were not found during init */
+	UPROPERTY(config, EditAnywhere, Category = "Documentation: Links", meta = (EditCondition = bCollectNativeHints))
+	bool bRemoveOldNativeHints;
+
 	UPROPERTY(config, EditAnywhere, EditFixedSize, Category = "Documentation: Links")
 	TArray<FDocumentationHintLink> NativeLinks;
 
 	UPROPERTY(config, EditAnywhere, Category = "Documentation: Links")
 	TArray<FDocumentationHintLink> Links;
+
+	/** Config based option takes priority over others */
+	//UPROPERTY(config)
+	UPROPERTY(config, EditAnywhere, Category = "Documentation: Links")
+	TArray<FDocumentationHintLink> LinksOverride;
 
 
 public:
@@ -180,5 +194,15 @@ public:
 
 	TMap<FString, FString> CollectLinksOfType(EDocumentationLinkType Type) const;
 
+
+	TArray<const TArray<FDocumentationHintLink>*> GetSources() const
+	{
+		return TArray<const TArray<FDocumentationHintLink>*>(
+		{
+			&NativeLinks,
+			&Links,
+			&LinksOverride
+		});
+	}
 };
 

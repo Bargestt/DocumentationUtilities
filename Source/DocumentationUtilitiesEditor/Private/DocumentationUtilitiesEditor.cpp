@@ -68,6 +68,8 @@ bool IDocumentationUtilitiesEditorModule::IsLinkValid(FString Link)
 	);
 }
 
+
+
 class FDocumentationUtilitiesEditorModule : public IDocumentationUtilitiesEditorModule
 {
 public:
@@ -78,8 +80,25 @@ public:
 			PropertyModule.RegisterCustomPropertyTypeLayout(FHintStruct::StaticStruct()->GetFName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FHintStructCustomization::MakeInstance));
 			PropertyModule.RegisterCustomPropertyTypeLayout(FDocumentationHintLink::StaticStruct()->GetFName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FHintLinkCustomization::MakeInstance));
 		}
-		
 
+		RegisterToolMenu();
+	}
+
+	virtual void ShutdownModule() override
+	{
+		UnregisterToolMenu();
+
+		if (FModuleManager::Get().IsModuleLoaded("PropertyEditor"))
+		{
+			FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+			PropertyModule.UnregisterCustomPropertyTypeLayout(FHintStruct::StaticStruct()->GetFName());
+			PropertyModule.UnregisterCustomPropertyTypeLayout(FDocumentationHintLink::StaticStruct()->GetFName());
+		}
+	}
+
+private:
+	void RegisterToolMenu()
+	{		
 		if (UToolMenu* Menu = UToolMenus::Get()->ExtendMenu("ContentBrowser.AssetContextMenu"))
 		{		
 			FToolMenuSection& Section = Menu->FindOrAddSection("DocumentationUtilities");
@@ -169,7 +188,8 @@ public:
 				}));
 		}
 	}
-	virtual void ShutdownModule() override
+
+	void UnregisterToolMenu()
 	{
 		if (UToolMenus* ToolMenus = UToolMenus::TryGet())
 		{
@@ -177,14 +197,7 @@ public:
 			{
 				Menu->RemoveSection("DocumentationUtilities");
 			}
-		}		
-
-		if (FModuleManager::Get().IsModuleLoaded("PropertyEditor"))
-		{
-			FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
-			PropertyModule.UnregisterCustomPropertyTypeLayout(FHintStruct::StaticStruct()->GetFName());
-			PropertyModule.UnregisterCustomPropertyTypeLayout(FDocumentationHintLink::StaticStruct()->GetFName());
-		}
+		}	
 	}
 };
 

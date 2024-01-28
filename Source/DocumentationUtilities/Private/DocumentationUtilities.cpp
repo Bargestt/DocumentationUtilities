@@ -4,7 +4,6 @@
 
 #define LOCTEXT_NAMESPACE "FDocumentationUtilitiesModule"
 
-DEFINE_LOG_CATEGORY(LogDocumentationUtilities);
 
 void FDocumentationUtilitiesModule::StartupModule()
 {
