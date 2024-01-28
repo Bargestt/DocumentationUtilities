@@ -16,6 +16,8 @@
 #include <Framework/Notifications/NotificationManager.h>
 #include <Widgets/Notifications/SNotificationList.h>
 
+#include <Subsystems/AssetEditorSubsystem.h>
+
 
 
 #define LOCTEXT_NAMESPACE "DocumentationUtilities"
@@ -40,6 +42,14 @@ void IDocumentationUtilitiesEditorModule::OpenLink(FString Link)
 			FPlatformProcess::LaunchURL(*Address, nullptr, nullptr);
 		}
 	}
+	else if (Address.StartsWith(TEXT("/")) || Address.StartsWith(TEXT("Edit:/")) || Address.StartsWith(TEXT("View:/")))
+	{
+		EAssetTypeActivationOpenedMethod Method = Address.StartsWith(TEXT("Edit:/")) ? EAssetTypeActivationOpenedMethod::Edit : EAssetTypeActivationOpenedMethod::View;
+		Address.RemoveFromStart(TEXT("Edit:"));
+		Address.RemoveFromStart(TEXT("View:"));
+
+		GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAsset(Address, Method);
+	}	
 	else
 	{
 		const FText ErrorText = LOCTEXT("OpenURL_BadAddress", "Failed to open link: Bad address");
@@ -52,7 +62,10 @@ void IDocumentationUtilitiesEditorModule::OpenLink(FString Link)
 bool IDocumentationUtilitiesEditorModule::IsLinkValid(FString Link)
 {
 	FString Address = UDocumentationUtilities::ResolveLink(Link);
-	return Address.StartsWith(TEXT("http")) || Address.StartsWith(TEXT("https"));
+	return !Address.IsEmpty() && (
+			Address.StartsWith(TEXT("http")) || Address.StartsWith(TEXT("https")) || 
+			Address.StartsWith(TEXT("/")) || Address.StartsWith(TEXT("Edit:/")) || Address.StartsWith(TEXT("View:/"))
+	);
 }
 
 class FDocumentationUtilitiesEditorModule : public IDocumentationUtilitiesEditorModule

@@ -151,7 +151,8 @@ public:
 	 * Define your Link actions here or override existing ones
 	 * Use context menu to search Link references
 	 * 
-	 * Start link with 'http' or 'https' to define Open URL action
+	 * Start Link with 'http' or 'https' to open URL in your web browser
+	 * Start Link with '/' to open asset editor for the Path specified, add prefix 'Edit:' to open in edit mode
 	 */
 	UPROPERTY(EditAnywhere, Category = "Documentation: Links", meta = (HideChildren))
 	FHintStruct LinksHint = FHintStruct().Hint(EHintSource::PropertyTooltip).Tooltip(EHintSource::PropertyTooltip);
